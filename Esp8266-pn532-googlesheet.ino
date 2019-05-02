@@ -31,9 +31,9 @@ String idPermitted[ARRAYSIZE];
 
 
 
-const long msOpening = 1500;  //ms tiempo de apertura de la lock
-const long intervalNFC = 100;   // ms intervalo de chequeo de tarjeta
-const long intervalPermissions = 1*60000;   // ms intervalo de chequeo de permisos
+const long msOpening = 1500;  // duration of opened lock
+const long intervalNFC = 100;   // ms period of NFC check 
+const long intervalPermissions = 1*60000;   // ms period Permissions update
 
 //const char *ssid = "dlink";
 //const char *password = "03101993";
@@ -51,7 +51,7 @@ bool sntp_time_is_set = false;
 bool got_ntp = false;
 
  HTTPSRedirect* client = nullptr;
-
+// at Linux terminal) try to get fingerprint. But should work even without it
 // echo | openssl s_client -connect script.google.com:443 |& openssl x509 -fingerprint -noout
  const char* fingerprint = "8D:B7:8B:3F:96:EA:1C:44:89:01:B0:CD:4A:B5:35:FB:0C:F1:D9:E5";
 //const uint8_t fingerprint[20] = {};
