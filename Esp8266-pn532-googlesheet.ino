@@ -24,16 +24,16 @@ PN532_I2C pn532spi(Wire);
 PN532 nfc(pn532spi);  
 
 unsigned long previousMillisNFC = 0; 
-unsigned long previousMillisPermisos = 0; 
+unsigned long previousMillisPermissions = 0; 
 
 #define ARRAYSIZE 100 
-String idPermitido[ARRAYSIZE];
+String idPermitted[ARRAYSIZE];
 
 
 
-const long msApertura = 1500;  //ms tiempo de apertura de la lock
-const long intervalNFC = 100;   // ms intervalo de chequeo de tarjeta
-const long intervalPermisos = 1*60000;   // ms intervalo de chequeo de permisos
+const long msOpening = 1500;  // duration of opened lock
+const long intervalNFC = 100;   // ms period of NFC check 
+const long intervalPermissions = 1*60000;   // ms period Permissions update
 
 //const char *ssid = "dlink";
 //const char *password = "03101993";
@@ -51,7 +51,7 @@ bool sntp_time_is_set = false;
 bool got_ntp = false;
 
  HTTPSRedirect* client = nullptr;
-
+// at Linux terminal) try to get fingerprint. But should work even without it
 // echo | openssl s_client -connect script.google.com:443 |& openssl x509 -fingerprint -noout
  const char* fingerprint = "8D:B7:8B:3F:96:EA:1C:44:89:01:B0:CD:4A:B5:35:FB:0C:F1:D9:E5";
 //const uint8_t fingerprint[20] = {};
@@ -67,9 +67,9 @@ int debug = 5;
 
 int k = 0;
 
-void abrirPuerta(void){
+void openDoor(void){
     digitalWrite ( led, 0 );
-    const long n = (int)msApertura/10;
+    const long n = (int)msOpening/10;
     for(int i = 0; i < n; i++){
       digitalWrite ( lock, 1 );
       delay(5);
@@ -91,7 +91,7 @@ String PrintHex(const byte * uid, const long uidLength){
   return r;
 }
 
-String buscarNFC(void) {
+String searchNFC(void) {
   uint8_t success;
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   uint8_t uidLength;                        // Length of the UID (4 (Mifare Classic) or 7 (Mifare Ultralight) bytes depending on ISO14443A card type)
@@ -103,7 +103,7 @@ String buscarNFC(void) {
 
 void verNFC(void){
   String uid;
-  uid = buscarNFC();
+  uid = searchNFC();
   if(uid != "0"){  // Display some basic information about the card
     Serial.println(" ");
     Serial.println("Found an ISO14443A card");
@@ -114,22 +114,22 @@ void verNFC(void){
   //got_ntp = acquireNetworkTime();
   //debug_out(F("\nNTP time "), DEBUG_MIN_INFO, 0);
   //debug_out(String(got_ntp?"":"not ")+F("received"), DEBUG_MIN_INFO, 1);
-    bool noEncontrado = true;
+    bool notFound = true;
     for(int i = 0; i < ARRAYSIZE; i++){
-      if(uid == idPermitido[i]){
+      if(uid == idPermitted[i]){
 
       digitalWrite ( led_rfid_accepted, 0 );//lit
   
          // if(uid == "35-107-94-27"){
-        abrirPuerta();
-        logIngreso(uid);
-        noEncontrado = false;
+        openDoor();
+        logEntry(uid);
+        notFound = false;
         break;
       }
     }
-    if(noEncontrado)// read id, but it was not in permit list
+    if(notFound)// read id, but it was not in permit list
     
-      postAcceso(url + "error&id=" + uid );
+      postAccess(url + "error&id=" + uid );
       digitalWrite ( led_rfid_denied, 0 );//lit
       
   } else {
@@ -140,14 +140,14 @@ void verNFC(void){
 }
 
 
-void logIngreso(String id){
+void logEntry(String id){
     Serial.println(" ");
-    Serial.println("Acceso concedido a: " + id);
-    Serial.println(url + "acceso&id=" + id);
-    postAcceso(url + "acceso&id=" + id );
+    Serial.println("Access granted to: " + id);
+    Serial.println(url + "access&id=" + id);
+    postAccess(url + "access&id=" + id );
 }
 
-void postAcceso(String url){
+void postAccess(String url){
   HTTPSRedirect* client = nullptr;
   Serial.println(" ");
   Serial.print("Posting data: "); Serial.println(url);
@@ -156,7 +156,7 @@ void postAcceso(String url){
     client->setInsecure();
   client->setPrintResponseBody(false);
   client->setContentTypeHeader("application/json");
-  Serial.print("postAcceso(String url) Connecting to ");
+  Serial.print("postAccess(String url) Connecting to ");
   Serial.println(host);
 
   bool flag = false;
@@ -190,39 +190,39 @@ void postAcceso(String url){
 
 
 
-void refreshPermisos(void) {
+void refreshPermissions(void) {
   int pos = 0;
   int i = 0;
-  String res = getPermisos();
+  String res = getPermissions();
   Serial.println(" ");
   if (res.indexOf(",") < 2) {
   
   res = "XXXXXXXXXXXXXXXXXXX,";
   }
   Serial.println("************************");
-  Serial.println("* Permitidos: ");
+  Serial.println("* Permisions: ");
     while(res.indexOf(",", pos) > 0){
       
-    idPermitido[i] = res.substring(pos, res.indexOf(",", pos));// fill fresh permits
+    idPermitted[i] = res.substring(pos, res.indexOf(",", pos));// fill fresh permits
     pos = res.indexOf(",", pos) +1;
-    Serial.println(idPermitido[i]);
+    Serial.println(idPermitted[i]);
     i++;
   }
   for(int j = i; j < ARRAYSIZE; j++)// claen the rest of the list
   //  for(var j = i; j < ARRAYSIZE; j++)
-      idPermitido[j] = "";
+      idPermitted[j] = "";
   Serial.println("************************");
 }
 
-String getPermisos(){
+String getPermissions(){
   HTTPSRedirect* client = nullptr;
-  String n_url = url + "permisos";
+  String n_url = url + "permissions";
   client = new HTTPSRedirect(httpsPort);
    client->setInsecure();// from logging
   client->setPrintResponseBody(true);// was false
   client->setContentTypeHeader("application/json");
   
-  Serial.print("getPermisos() Connecting to ");
+  Serial.print("getPermissions() Connecting to ");
   Serial.println(host);
 
   bool flag = false;  // Try to connect for a maximum of 5 times
@@ -310,21 +310,21 @@ void handleNotFound() {
 server.send ( 404, "text/plain", message );
 }
 
-void handleAbrir() {
+void handleOpen() {
   server.send ( 200, "text/html", "OK" );
-  //abrirPuerta();
+  //openDoor();
   if(server.args()){
-    bool noEncontrado = true;
+    bool notFound = true;
     for(int i = 0; i < ARRAYSIZE; i++){
-      if(server.arg(0) == idPermitido[i]){
-        abrirPuerta();
-        logIngreso(server.arg(0));
-        noEncontrado = false;
+      if(server.arg(0) == idPermitted[i]){
+        openDoor();
+        logEntry(server.arg(0));
+        notFound = false;
         break;
       }
     }
-    if(noEncontrado)
-      postAcceso(url + "error&id=" + server.arg(0) );
+    if(notFound)
+      postAccess(url + "error&id=" + server.arg(0) );
   }
 }
 
@@ -465,9 +465,9 @@ pinMode ( led_rfid_accepted, OUTPUT );
   Serial.println(WiFi.macAddress());
 
   server.on ( "/", handleRoot );
-  server.on ( "/abrir", handleAbrir );
-  server.on ( "/actualizarPermisos", []() {
-    previousMillisPermisos = millis() - intervalPermisos;
+  server.on ( "/open", handleOpen );
+  server.on ( "/updatePermissions", []() {
+    previousMillisPermissions = millis() - intervalPermissions;
     server.send ( 200, "text/plain", "OK" );
   } );
   server.onNotFound ( handleNotFound );
@@ -475,7 +475,7 @@ pinMode ( led_rfid_accepted, OUTPUT );
   Serial.println ( "HTTP server started" );
    Serial.print ( "WiFi.getMode = " );
  Serial.println(WiFi.getMode());
-  previousMillisPermisos = millis() - intervalPermisos;
+  previousMillisPermissions = millis() - intervalPermissions;
 }
 
 void loop ( void ) {
@@ -491,10 +491,10 @@ void loop ( void ) {
    // Serial.println("Checking verNFC()");
     verNFC();
   }
-  if(currentMillis - previousMillisPermisos >= intervalPermisos) {
-    previousMillisPermisos = currentMillis; 
-    Serial.println("Checking Permisos");
-    refreshPermisos();
+  if(currentMillis - previousMillisPermissions >= intervalPermissions) {
+    previousMillisPermissions = currentMillis; 
+    Serial.println("Checking Permissions");
+    refreshPermissions();
   }
   server.handleClient();
 }
